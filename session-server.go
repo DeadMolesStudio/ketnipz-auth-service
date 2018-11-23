@@ -82,6 +82,10 @@ func (sm *SessionManager) Delete(ctx context.Context, in *session.SessionID) (*s
 		return &session.Nothing{}, status.Error(codes.Internal, err.Error())
 	}
 
+	logger.Infow("session deleted",
+		"sID", in.UUID,
+	)
+
 	return &session.Nothing{}, nil
 }
 
