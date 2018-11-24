@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/satori/go.uuid"
@@ -13,7 +14,7 @@ import (
 )
 
 type SessionManager struct {
-	redisConn redis.Conn
+	redisConnPool *redis.Pool
 }
 
 func NewSessionManager(address, database string) *SessionManager {
@@ -29,20 +30,30 @@ func NewSessionManager(address, database string) *SessionManager {
 }
 
 func (sm *SessionManager) Open(address, database string) error {
-	var err error
-	sm.redisConn, err = redis.DialURL("redis://" + address + "/" + database)
+	sm.redisConnPool = &redis.Pool{
+		MaxIdle: 500,
+		IdleTimeout: 240 * time.Second,
+		MaxActive: 1000,
+		Wait: true,
+		Dial: func () (redis.Conn, error) { return redis.DialURL("redis://" + address + "/" + database) },
+	}
+	conn := sm.redisConnPool.Get()
+	defer conn.Close()
+	_, err := conn.Do("PING")
 	return err
 }
 
 func (sm *SessionManager) Close() {
-	sm.redisConn.Close()
+	sm.redisConnPool.Close()
 }
 
 func (sm *SessionManager) Create(ctx context.Context, in *session.Session) (*session.SessionID, error) {
 	sID := ""
+	conn := sm.redisConnPool.Get()
+	defer conn.Close()
 	for {
 		sID = createUUID()
-		res, err := sm.redisConn.Do("SET", sID, in.UID, "NX", "EX", 30*24*60*60)
+		res, err := conn.Do("SET", sID, in.UID, "NX", "EX", 30*24*60*60)
 		if err != nil {
 			return &session.SessionID{}, status.Error(codes.Internal, err.Error())
 		}
@@ -65,7 +76,9 @@ func (sm *SessionManager) Create(ctx context.Context, in *session.Session) (*ses
 }
 
 func (sm *SessionManager) Get(ctx context.Context, in *session.SessionID) (*session.Session, error) {
-	res, err := redis.Uint64(sm.redisConn.Do("GET", in.UUID))
+	conn := sm.redisConnPool.Get()
+	defer conn.Close()
+	res, err := redis.Uint64(conn.Do("GET", in.UUID))
 	if err != nil {
 		if err == redis.ErrNil {
 			return &session.Session{}, status.Error(codes.NotFound, session.ErrKeyNotFound.Error())
@@ -77,7 +90,9 @@ func (sm *SessionManager) Get(ctx context.Context, in *session.SessionID) (*sess
 }
 
 func (sm *SessionManager) Delete(ctx context.Context, in *session.SessionID) (*session.Nothing, error) {
-	_, err := redis.Int(sm.redisConn.Do("DEL", in.UUID))
+	conn := sm.redisConnPool.Get()
+	defer conn.Close()
+	_, err := redis.Int(conn.Do("DEL", in.UUID))
 	if err != nil {
 		return &session.Nothing{}, status.Error(codes.Internal, err.Error())
 	}
