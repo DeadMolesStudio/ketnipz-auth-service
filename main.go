@@ -11,11 +11,17 @@ import (
 
 func main() {
 	l := logger.InitLogger()
-	defer l.Sync()
+	defer func() {
+		err := l.Sync()
+		if err != nil {
+			logger.Errorf("error while syncing log data: %v", err)
+		}
+	}()
 
 	sm := NewSessionManager("user@redis:6379", "0")
 	defer sm.Close()
 
+	/* #nosec */
 	lis, err := net.Listen("tcp", ":8081")
 	if err != nil {
 		logger.Panicf("cant listen port %v", err)

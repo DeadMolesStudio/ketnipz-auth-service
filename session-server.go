@@ -31,11 +31,11 @@ func NewSessionManager(address, database string) *SessionManager {
 
 func (sm *SessionManager) Open(address, database string) error {
 	sm.redisConnPool = &redis.Pool{
-		MaxIdle: 500,
+		MaxIdle:     500,
 		IdleTimeout: 240 * time.Second,
-		MaxActive: 1000,
-		Wait: true,
-		Dial: func () (redis.Conn, error) { return redis.DialURL("redis://" + address + "/" + database) },
+		MaxActive:   1000,
+		Wait:        true,
+		Dial:        func() (redis.Conn, error) { return redis.DialURL("redis://" + address + "/" + database) },
 	}
 	conn := sm.redisConnPool.Get()
 	defer conn.Close()
