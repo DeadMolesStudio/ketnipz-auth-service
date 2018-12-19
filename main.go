@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"net"
 
 	"google.golang.org/grpc"
@@ -10,6 +11,10 @@ import (
 )
 
 func main() {
+	dbConnStr := flag.String("db_connstr", "user@localhost:6379", "redis connection string")
+	dbName := flag.String("db_name", "0", "redis database name")
+	flag.Parse()
+
 	l := logger.InitLogger()
 	defer func() {
 		err := l.Sync()
@@ -18,7 +23,7 @@ func main() {
 		}
 	}()
 
-	sm := NewSessionManager("user@redis:6379", "0")
+	sm := NewSessionManager(*dbConnStr, *dbName)
 	defer sm.Close()
 
 	/* #nosec */
